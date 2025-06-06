@@ -25,14 +25,24 @@ const CreateIssueModal = ({ date, onClose, onCreated }) => {
     formData.append('description', description);
     formData.append('date', date);
     
-    files.forEach(file => {
+    console.log('Creating issue with files:', files);
+    
+    files.forEach((file, index) => {
+      console.log(`Adding file ${index}:`, file.name, file.type);
       formData.append('attachments', file);
     });
 
+    // Log FormData contents
+    for (let pair of formData.entries()) {
+      console.log(pair[0], pair[1]);
+    }
+
     try {
-      await issuesAPI.create(formData);
+      const response = await issuesAPI.create(formData);
+      console.log('Issue created successfully:', response.data);
       onCreated();
     } catch (error) {
+      console.error('Error creating issue:', error);
       setError(error.response?.data?.error || 'Failed to create issue');
       setSubmitting(false);
     }
@@ -40,6 +50,10 @@ const CreateIssueModal = ({ date, onClose, onCreated }) => {
 
   const removeFile = (index) => {
     setFiles(files.filter((_, i) => i !== index));
+  };
+
+  const addFiles = (newFiles) => {
+    setFiles([...files, ...Array.from(newFiles)]);
   };
 
   const isImageFile = (file) => {
@@ -109,7 +123,7 @@ const CreateIssueModal = ({ date, onClose, onCreated }) => {
                   <input
                     type="file"
                     multiple
-                    onChange={(e) => setFiles([...files, ...Array.from(e.target.files)])}
+                    onChange={(e) => addFiles(e.target.files)}
                     className="hidden"
                     accept="image/*"
                   />
@@ -121,7 +135,7 @@ const CreateIssueModal = ({ date, onClose, onCreated }) => {
                   <input
                     type="file"
                     multiple
-                    onChange={(e) => setFiles([...files, ...Array.from(e.target.files)])}
+                    onChange={(e) => addFiles(e.target.files)}
                     className="hidden"
                     accept=".pdf,.doc,.docx,.txt,.zip,.rar"
                   />
@@ -133,25 +147,28 @@ const CreateIssueModal = ({ date, onClose, onCreated }) => {
                 <div className="mt-3">
                   <h4 className="text-sm font-medium text-gray-700 mb-2">Images to upload:</h4>
                   <div className="grid grid-cols-3 gap-2">
-                    {imageFiles.map((file, index) => (
-                      <div key={index} className="relative group">
-                        <img
-                          src={URL.createObjectURL(file)}
-                          alt={file.name}
-                          className="w-full aspect-square object-cover rounded-lg"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => removeFile(files.indexOf(file))}
-                          className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center text-xs hover:bg-red-600 transition-colors"
-                        >
-                          <FiX className="w-3 h-3" />
-                        </button>
-                        <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs p-1 rounded-b-lg truncate">
-                          {file.name}
+                    {imageFiles.map((file, index) => {
+                      const fileIndex = files.indexOf(file);
+                      return (
+                        <div key={fileIndex} className="relative group">
+                          <img
+                            src={URL.createObjectURL(file)}
+                            alt={file.name}
+                            className="w-full aspect-square object-cover rounded-lg"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => removeFile(fileIndex)}
+                            className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center text-xs hover:bg-red-600 transition-colors"
+                          >
+                            <FiX className="w-3 h-3" />
+                          </button>
+                          <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs p-1 rounded-b-lg truncate">
+                            {file.name}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -161,24 +178,27 @@ const CreateIssueModal = ({ date, onClose, onCreated }) => {
                 <div className="mt-3">
                   <h4 className="text-sm font-medium text-gray-700 mb-2">Files to upload:</h4>
                   <div className="space-y-1">
-                    {otherFiles.map((file, index) => (
-                      <div key={index} className="flex items-center justify-between bg-gray-50 rounded-lg p-2">
-                        <div className="flex items-center space-x-2">
-                          <FiPaperclip className="w-4 h-4 text-gray-500" />
-                          <span className="text-sm text-gray-700">{file.name}</span>
-                          <span className="text-xs text-gray-500">
-                            ({(file.size / 1024 / 1024).toFixed(2)} MB)
-                          </span>
+                    {otherFiles.map((file, index) => {
+                      const fileIndex = files.indexOf(file);
+                      return (
+                        <div key={fileIndex} className="flex items-center justify-between bg-gray-50 rounded-lg p-2">
+                          <div className="flex items-center space-x-2">
+                            <FiPaperclip className="w-4 h-4 text-gray-500" />
+                            <span className="text-sm text-gray-700">{file.name}</span>
+                            <span className="text-xs text-gray-500">
+                              ({(file.size / 1024 / 1024).toFixed(2)} MB)
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeFile(fileIndex)}
+                            className="text-red-600 hover:text-red-800"
+                          >
+                            <FiX className="w-4 h-4" />
+                          </button>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => removeFile(files.indexOf(file))}
-                          className="text-red-600 hover:text-red-800"
-                        >
-                          <FiX className="w-4 h-4" />
-                        </button>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}

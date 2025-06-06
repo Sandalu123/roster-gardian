@@ -88,32 +88,53 @@ router.post('/', authenticate, issueUpload.array('attachments', 10), (req, res) 
   const { title, description, date } = req.body;
   const createdBy = req.user.id;
 
+  console.log('Creating issue:', { title, description, date, createdBy });
+  console.log('Files received:', req.files ? req.files.length : 0);
+
   db.run(
     'INSERT INTO issues (title, description, date, created_by, status_id) VALUES (?, ?, ?, ?, 1)',
     [title, description, date, createdBy],
     function(err) {
-      if (err) return res.status(500).json({ error: err.message });
+      if (err) {
+        console.error('Error creating issue:', err);
+        return res.status(500).json({ error: err.message });
+      }
       
       const issueId = this.lastID;
+      console.log('Issue created with ID:', issueId);
       
       if (req.files && req.files.length > 0) {
-        const attachmentPromises = req.files.map(file => {
+        console.log('Processing attachments for issue:', issueId);
+        const attachmentPromises = req.files.map((file, index) => {
+          console.log(`Processing attachment ${index}:`, file.filename, file.mimetype);
           return new Promise((resolve, reject) => {
             db.run(
               'INSERT INTO issue_attachments (issue_id, file_path, file_name, file_type) VALUES (?, ?, ?, ?)',
               [issueId, `/uploads/issues/${file.filename}`, file.originalname, file.mimetype],
               (err) => {
-                if (err) reject(err);
-                else resolve();
+                if (err) {
+                  console.error('Error saving attachment:', err);
+                  reject(err);
+                } else {
+                  console.log('Attachment saved:', file.originalname);
+                  resolve();
+                }
               }
             );
           });
         });
 
         Promise.all(attachmentPromises)
-          .then(() => res.json({ id: issueId, title, description, date }))
-          .catch(err => res.status(500).json({ error: err.message }));
+          .then(() => {
+            console.log('All attachments saved for issue:', issueId);
+            res.json({ id: issueId, title, description, date });
+          })
+          .catch(err => {
+            console.error('Error saving attachments:', err);
+            res.status(500).json({ error: err.message });
+          });
       } else {
+        console.log('No attachments for issue:', issueId);
         res.json({ id: issueId, title, description, date });
       }
     }
@@ -349,26 +370,56 @@ router.put('/:id/status', authenticate, (req, res) => {
   const { status_id } = req.body;
   const userId = req.user.id;
 
+  console.log(`Updating issue ${id} to status ${status_id} by user ${userId}`);
+
+  // Validate status_id
+  if (!status_id) {
+    return res.status(400).json({ error: 'status_id is required' });
+  }
+
   // Get current status first
   db.get('SELECT status_id FROM issues WHERE id = ?', [id], (err, currentIssue) => {
-    if (err) return res.status(500).json({ error: err.message });
-    if (!currentIssue) return res.status(404).json({ error: 'Issue not found' });
+    if (err) {
+      console.error('Error getting current issue:', err);
+      return res.status(500).json({ error: err.message });
+    }
+    if (!currentIssue) {
+      return res.status(404).json({ error: 'Issue not found' });
+    }
 
     const oldStatusId = currentIssue.status_id;
+    
+    // Don't update if status is the same
+    if (oldStatusId === status_id) {
+      return res.json({ message: 'Status unchanged' });
+    }
     
     // Update issue status
     db.run(
       'UPDATE issues SET status_id = ? WHERE id = ?',
       [status_id, id],
       function(err) {
-        if (err) return res.status(500).json({ error: err.message });
+        if (err) {
+          console.error('Error updating issue status:', err);
+          return res.status(500).json({ error: err.message });
+        }
+        
+        console.log(`Issue ${id} status updated from ${oldStatusId} to ${status_id}`);
         
         // Log status change as a comment
         db.get(
           'SELECT old_s.name as old_name, new_s.name as new_name FROM issue_statuses old_s, issue_statuses new_s WHERE old_s.id = ? AND new_s.id = ?',
           [oldStatusId, status_id],
           (err, statusNames) => {
-            if (err) return res.status(500).json({ error: err.message });
+            if (err) {
+              console.error('Error getting status names:', err);
+              return res.status(500).json({ error: err.message });
+            }
+            
+            if (!statusNames) {
+              console.error('Status names not found for IDs:', oldStatusId, status_id);
+              return res.status(500).json({ error: 'Invalid status IDs' });
+            }
             
             const logContent = `Status changed from "${statusNames.old_name}" to "${statusNames.new_name}"`;
             
@@ -376,7 +427,11 @@ router.put('/:id/status', authenticate, (req, res) => {
               'INSERT INTO comments (issue_id, user_id, content, comment_type, old_status_id, new_status_id) VALUES (?, ?, ?, ?, ?, ?)',
               [id, userId, logContent, 'status_change', oldStatusId, status_id],
               (err) => {
-                if (err) console.error('Error logging status change:', err);
+                if (err) {
+                  console.error('Error logging status change:', err);
+                  // Still return success even if logging fails
+                }
+                console.log(`Status change logged for issue ${id}`);
                 res.json({ message: 'Issue status updated successfully' });
               }
             );

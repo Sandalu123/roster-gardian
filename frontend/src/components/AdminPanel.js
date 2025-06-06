@@ -89,7 +89,7 @@ const AdminPanel = ({ onClose }) => {
 
     try {
       if (editingStatus) {
-        await issuesAPI.updateStatus(editingStatus.id, statusFormData);
+        await issuesAPI.updateStatusType(editingStatus.id, statusFormData);
       } else {
         await issuesAPI.createStatus(statusFormData);
       }

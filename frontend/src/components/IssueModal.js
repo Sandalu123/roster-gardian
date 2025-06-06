@@ -27,6 +27,9 @@ const IssueModal = ({ issueId, onClose, onDeleted, onUpdated }) => {
         user ? issuesAPI.getComments(issueId) : Promise.resolve({ data: [] })
       ]);
 
+      console.log('Issue data:', issueResponse.data);
+      console.log('Comments data:', commentsResponse.data);
+
       setIssue(issueResponse.data);
       setComments(commentsResponse.data);
     } catch (error) {
@@ -39,6 +42,7 @@ const IssueModal = ({ issueId, onClose, onDeleted, onUpdated }) => {
   const loadStatuses = async () => {
     try {
       const response = await issuesAPI.getStatuses();
+      console.log('Statuses loaded:', response.data);
       setStatuses(response.data);
     } catch (error) {
       console.error('Error loading statuses:', error);
@@ -70,15 +74,20 @@ const IssueModal = ({ issueId, onClose, onDeleted, onUpdated }) => {
   };
 
   const handleStatusChange = async (newStatusId) => {
-    if (newStatusId === issue.status_id) return;
+    const newStatusIdInt = parseInt(newStatusId);
+    if (newStatusIdInt === issue.status_id) return;
+    
+    console.log('Changing status from', issue.status_id, 'to', newStatusIdInt);
     
     setUpdatingStatus(true);
     try {
-      await issuesAPI.updateStatus(issueId, newStatusId);
+      const response = await issuesAPI.updateStatus(issueId, newStatusIdInt);
+      console.log('Status update response:', response.data);
       loadIssueData();
       if (onUpdated) onUpdated();
     } catch (error) {
       console.error('Error updating status:', error);
+      alert('Failed to update status: ' + (error.response?.data?.error || error.message));
     } finally {
       setUpdatingStatus(false);
     }
@@ -126,10 +135,25 @@ const IssueModal = ({ issueId, onClose, onDeleted, onUpdated }) => {
     return fileType?.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(fileName);
   };
 
+  const getFileUrl = (filePath) => {
+    return `http://localhost:4010${filePath}`;
+  };
+
   if (loading) {
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-custom flex items-center justify-center z-50">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  if (!issue) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-custom flex items-center justify-center z-50">
+        <div className="bg-white rounded-xl p-6">
+          <p>Issue not found</p>
+          <button onClick={onClose} className="mt-4 px-4 py-2 bg-blue-600 text-white rounded">Close</button>
+        </div>
       </div>
     );
   }
@@ -185,15 +209,20 @@ const IssueModal = ({ issueId, onClose, onDeleted, onUpdated }) => {
                       .map((attachment) => (
                         <a
                           key={attachment.id}
-                          href={`http://localhost:4010${attachment.file_path}`}
+                          href={getFileUrl(attachment.file_path)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="block aspect-square bg-gray-100 rounded-lg overflow-hidden hover:shadow-lg transition-shadow"
                         >
                           <img
-                            src={`http://localhost:4010${attachment.file_path}`}
+                            src={getFileUrl(attachment.file_path)}
                             alt={attachment.file_name}
                             className="w-full h-full object-cover"
+                            onError={(e) => {
+                              console.error('Image failed to load:', attachment.file_path);
+                              e.target.style.display = 'none';
+                              e.target.parentElement.innerHTML = '<div class="w-full h-full flex items-center justify-center bg-gray-200 text-gray-500">Image not found</div>';
+                            }}
                           />
                         </a>
                       ))}
@@ -211,10 +240,10 @@ const IssueModal = ({ issueId, onClose, onDeleted, onUpdated }) => {
                       .map((attachment) => (
                         <a
                           key={attachment.id}
-                          href={`http://localhost:4010${attachment.file_path}`}
+                          href={getFileUrl(attachment.file_path)}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="flex items-center space-x-2 text-sm text-blue-600 hover:text-blue-800"
+                          className="flex items-center space-x-2 text-sm text-blue-600 hover:text-blue-800 p-2 bg-gray-50 rounded"
                         >
                           <FiPaperclip className="w-4 h-4" />
                           <span>{attachment.file_name}</span>
@@ -236,8 +265,8 @@ const IssueModal = ({ issueId, onClose, onDeleted, onUpdated }) => {
                   <div className="flex items-center space-x-2">
                     <label className="text-sm font-medium text-gray-700">Status:</label>
                     <select
-                      value={issue.status_id}
-                      onChange={(e) => handleStatusChange(parseInt(e.target.value))}
+                      value={issue.status_id || ''}
+                      onChange={(e) => handleStatusChange(e.target.value)}
                       disabled={updatingStatus}
                       className="text-sm px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
                     >
@@ -247,6 +276,7 @@ const IssueModal = ({ issueId, onClose, onDeleted, onUpdated }) => {
                         </option>
                       ))}
                     </select>
+                    {updatingStatus && <span className="text-xs">Updating...</span>}
                   </div>
                 )}
               </div>
@@ -273,7 +303,7 @@ const IssueModal = ({ issueId, onClose, onDeleted, onUpdated }) => {
                                 </div>
                               ) : comment.user_image ? (
                                 <img
-                                  src={`http://localhost:4010${comment.user_image}`}
+                                  src={getFileUrl(comment.user_image)}
                                   alt={comment.user_name}
                                   className="w-8 h-8 rounded-full object-cover"
                                 />
@@ -296,20 +326,52 @@ const IssueModal = ({ issueId, onClose, onDeleted, onUpdated }) => {
                                 </div>
                                 <p className="mt-1 text-gray-700 whitespace-pre-wrap">{comment.content}</p>
                                 
+                                {/* Display comment attachments */}
                                 {comment.attachments && comment.attachments.length > 0 && (
-                                  <div className="mt-2 space-y-1">
-                                    {comment.attachments.map((attachment) => (
-                                      <a
-                                        key={attachment.id}
-                                        href={`http://localhost:4010${attachment.file_path}`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="inline-flex items-center space-x-1 text-sm text-blue-600 hover:text-blue-800"
-                                      >
-                                        <FiPaperclip className="w-3 h-3" />
-                                        <span>{attachment.file_name}</span>
-                                      </a>
-                                    ))}
+                                  <div className="mt-3">
+                                    {/* Images in comment */}
+                                    {comment.attachments.filter(att => isImageFile(att.file_name, att.file_type)).length > 0 && (
+                                      <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-2">
+                                        {comment.attachments
+                                          .filter(att => isImageFile(att.file_name, att.file_type))
+                                          .map((attachment) => (
+                                            <a
+                                              key={attachment.id}
+                                              href={getFileUrl(attachment.file_path)}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="block aspect-square bg-gray-100 rounded overflow-hidden hover:shadow-md transition-shadow"
+                                            >
+                                              <img
+                                                src={getFileUrl(attachment.file_path)}
+                                                alt={attachment.file_name}
+                                                className="w-full h-full object-cover"
+                                              />
+                                            </a>
+                                          ))}
+                                      </div>
+                                    )}
+                                    
+                                    {/* Files in comment */}
+                                    {comment.attachments.filter(att => !isImageFile(att.file_name, att.file_type)).length > 0 && (
+                                      <div className="space-y-1">
+                                        {comment.attachments
+                                          .filter(att => !isImageFile(att.file_name, att.file_type))
+                                          .map((attachment) => (
+                                            <a
+                                              key={attachment.id}
+                                              href={getFileUrl(attachment.file_path)}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="inline-flex items-center space-x-1 text-sm text-blue-600 hover:text-blue-800 bg-white rounded px-2 py-1"
+                                            >
+                                              <FiPaperclip className="w-3 h-3" />
+                                              <span>{attachment.file_name}</span>
+                                              <FiDownload className="w-3 h-3" />
+                                            </a>
+                                          ))}
+                                      </div>
+                                    )}
                                   </div>
                                 )}
                                 

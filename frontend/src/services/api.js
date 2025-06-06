@@ -35,7 +35,7 @@ export const issuesAPI = {
   // Status management
   getStatuses: () => apiClient.get(`${API_BASE}/issues/statuses`),
   createStatus: (data) => apiClient.post(`${API_BASE}/issues/statuses`, data),
-  updateStatus: (id, data) => apiClient.put(`${API_BASE}/issues/statuses/${id}`, data),
+  updateStatusType: (id, data) => apiClient.put(`${API_BASE}/issues/statuses/${id}`, data),
   deleteStatus: (id) => apiClient.delete(`${API_BASE}/issues/statuses/${id}`)
 };
 
