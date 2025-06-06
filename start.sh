@@ -12,6 +12,16 @@ export FRONTEND_PORT=${FRONTEND_PORT:-3000}
 mkdir -p /app/backend/uploads/profiles /app/backend/uploads/issues /app/backend/uploads/comments
 chmod -R 755 /app/backend/uploads
 
+# Run database migration
+echo "🔄 Running database migration..."
+cd /app/backend && npm run migrate
+
+# Check if migration was successful
+if [ $? -ne 0 ]; then
+    echo "❌ Database migration failed, exiting..."
+    exit 1
+fi
+
 # Start backend
 echo "📡 Starting backend on port ${PORT}..."
 cd /app/backend && node server.js &

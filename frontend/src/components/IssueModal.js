@@ -2,19 +2,22 @@ import React, { useState, useEffect } from 'react';
 import { issuesAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { format } from 'date-fns';
-import { FiX, FiPaperclip, FiDownload, FiSend, FiThumbsUp, FiHeart, FiSmile, FiZap, FiCoffee } from 'react-icons/fi';
+import { FiX, FiPaperclip, FiDownload, FiSend, FiThumbsUp, FiHeart, FiSmile, FiZap, FiCoffee, FiTrash2, FiActivity } from 'react-icons/fi';
 
-const IssueModal = ({ issueId, onClose }) => {
+const IssueModal = ({ issueId, onClose, onDeleted, onUpdated }) => {
   const { user } = useAuth();
   const [issue, setIssue] = useState(null);
   const [comments, setComments] = useState([]);
+  const [statuses, setStatuses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [commentText, setCommentText] = useState('');
   const [commentFiles, setCommentFiles] = useState([]);
   const [submitting, setSubmitting] = useState(false);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
 
   useEffect(() => {
     loadIssueData();
+    loadStatuses();
   }, [issueId]);
 
   const loadIssueData = async () => {
@@ -30,6 +33,15 @@ const IssueModal = ({ issueId, onClose }) => {
       console.error('Error loading issue:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadStatuses = async () => {
+    try {
+      const response = await issuesAPI.getStatuses();
+      setStatuses(response.data);
+    } catch (error) {
+      console.error('Error loading statuses:', error);
     }
   };
 
@@ -57,6 +69,35 @@ const IssueModal = ({ issueId, onClose }) => {
     }
   };
 
+  const handleStatusChange = async (newStatusId) => {
+    if (newStatusId === issue.status_id) return;
+    
+    setUpdatingStatus(true);
+    try {
+      await issuesAPI.updateStatus(issueId, newStatusId);
+      loadIssueData();
+      if (onUpdated) onUpdated();
+    } catch (error) {
+      console.error('Error updating status:', error);
+    } finally {
+      setUpdatingStatus(false);
+    }
+  };
+
+  const handleDeleteIssue = async () => {
+    if (!window.confirm('Are you sure you want to delete this issue? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      await issuesAPI.delete(issueId);
+      onDeleted();
+    } catch (error) {
+      console.error('Error deleting issue:', error);
+      alert('Failed to delete issue');
+    }
+  };
+
   const handleReaction = async (commentId, reactionType, hasReacted) => {
     try {
       if (hasReacted) {
@@ -81,14 +122,8 @@ const IssueModal = ({ issueId, onClose }) => {
     return icons[type] || FiThumbsUp;
   };
 
-  const getStatusColor = (status) => {
-    const colors = {
-      open: 'bg-red-100 text-red-700',
-      in_progress: 'bg-yellow-100 text-yellow-700',
-      resolved: 'bg-green-100 text-green-700',
-      closed: 'bg-gray-100 text-gray-700'
-    };
-    return colors[status] || 'bg-gray-100 text-gray-700';
+  const isImageFile = (fileName, fileType) => {
+    return fileType?.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(fileName);
   };
 
   if (loading) {
@@ -99,60 +134,128 @@ const IssueModal = ({ issueId, onClose }) => {
     );
   }
 
+  const currentStatus = statuses.find(s => s.id === issue.status_id);
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-custom flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col animate-slide-up">
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <div className="flex items-center space-x-4">
             <h2 className="text-2xl font-bold text-gray-900">{issue.title}</h2>
-            <span className={`text-sm px-3 py-1 rounded-full ${getStatusColor(issue.status)}`}>
-              {issue.status.replace('_', ' ')}
-            </span>
+            {currentStatus && (
+              <span 
+                className="text-sm px-3 py-1 rounded-full text-white"
+                style={{ backgroundColor: currentStatus.color }}
+              >
+                {currentStatus.name}
+              </span>
+            )}
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            <FiX className="w-5 h-5" />
-          </button>
+          <div className="flex items-center space-x-2">
+            {user?.role === 'admin' && (
+              <button
+                onClick={handleDeleteIssue}
+                className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                title="Delete Issue"
+              >
+                <FiTrash2 className="w-5 h-5" />
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              <FiX className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto custom-scrollbar">
           <div className="p-6">
             <div className="mb-6">
-              <p className="text-gray-700 whitespace-pre-wrap">{issue.description}</p>
-              <div className="mt-4 flex items-center text-sm text-gray-500">
-                <span>Created by {issue.created_by_name}</span>
-                <span className="mx-2">•</span>
-                <span>{format(new Date(issue.created_at), 'MMM d, yyyy h:mm a')}</span>
-              </div>
+              <p className="text-gray-700 whitespace-pre-wrap mb-4">{issue.description}</p>
               
-              {issue.attachments && issue.attachments.length > 0 && (
-                <div className="mt-4">
-                  <h4 className="text-sm font-semibold text-gray-700 mb-2">Attachments</h4>
-                  <div className="space-y-1">
-                    {issue.attachments.map((attachment) => (
-                      <a
-                        key={attachment.id}
-                        href={`http://localhost:4010${attachment.file_path}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center space-x-2 text-sm text-blue-600 hover:text-blue-800"
-                      >
-                        <FiPaperclip className="w-4 h-4" />
-                        <span>{attachment.file_name}</span>
-                        <FiDownload className="w-3 h-3" />
-                      </a>
-                    ))}
+              {/* Display images from issue attachments */}
+              {issue.attachments && issue.attachments.filter(att => isImageFile(att.file_name, att.file_type)).length > 0 && (
+                <div className="mb-4">
+                  <h4 className="text-sm font-semibold text-gray-700 mb-2">Images</h4>
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                    {issue.attachments
+                      .filter(att => isImageFile(att.file_name, att.file_type))
+                      .map((attachment) => (
+                        <a
+                          key={attachment.id}
+                          href={`http://localhost:4010${attachment.file_path}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block aspect-square bg-gray-100 rounded-lg overflow-hidden hover:shadow-lg transition-shadow"
+                        >
+                          <img
+                            src={`http://localhost:4010${attachment.file_path}`}
+                            alt={attachment.file_name}
+                            className="w-full h-full object-cover"
+                          />
+                        </a>
+                      ))}
                   </div>
                 </div>
               )}
+
+              {/* Display non-image attachments */}
+              {issue.attachments && issue.attachments.filter(att => !isImageFile(att.file_name, att.file_type)).length > 0 && (
+                <div className="mb-4">
+                  <h4 className="text-sm font-semibold text-gray-700 mb-2">Files</h4>
+                  <div className="space-y-1">
+                    {issue.attachments
+                      .filter(att => !isImageFile(att.file_name, att.file_type))
+                      .map((attachment) => (
+                        <a
+                          key={attachment.id}
+                          href={`http://localhost:4010${attachment.file_path}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center space-x-2 text-sm text-blue-600 hover:text-blue-800"
+                        >
+                          <FiPaperclip className="w-4 h-4" />
+                          <span>{attachment.file_name}</span>
+                          <FiDownload className="w-3 h-3" />
+                        </a>
+                      ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between text-sm text-gray-500">
+                <div className="flex items-center space-x-4">
+                  <span>Created by {issue.created_by_name}</span>
+                  <span>•</span>
+                  <span>{format(new Date(issue.created_at), 'MMM d, yyyy h:mm a')}</span>
+                </div>
+                
+                {user && (
+                  <div className="flex items-center space-x-2">
+                    <label className="text-sm font-medium text-gray-700">Status:</label>
+                    <select
+                      value={issue.status_id}
+                      onChange={(e) => handleStatusChange(parseInt(e.target.value))}
+                      disabled={updatingStatus}
+                      className="text-sm px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                    >
+                      {statuses.map(status => (
+                        <option key={status.id} value={status.id}>
+                          {status.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
             </div>
 
             {user && (
               <>
                 <div className="border-t border-gray-200 pt-6">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Comments</h3>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Activity</h3>
                   
                   {comments.length > 0 ? (
                     <div className="space-y-4">
@@ -160,9 +263,15 @@ const IssueModal = ({ issueId, onClose }) => {
                         const userReactions = comment.reactions.filter(r => r.user_id === user.id);
                         
                         return (
-                          <div key={comment.id} className="bg-gray-50 rounded-lg p-4">
+                          <div key={comment.id} className={`rounded-lg p-4 ${
+                            comment.comment_type === 'status_change' ? 'bg-blue-50 border-l-4 border-blue-400' : 'bg-gray-50'
+                          }`}>
                             <div className="flex items-start space-x-3">
-                              {comment.user_image ? (
+                              {comment.comment_type === 'status_change' ? (
+                                <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+                                  <FiActivity className="w-4 h-4 text-blue-600" />
+                                </div>
+                              ) : comment.user_image ? (
                                 <img
                                   src={`http://localhost:4010${comment.user_image}`}
                                   alt={comment.user_name}
@@ -181,6 +290,9 @@ const IssueModal = ({ issueId, onClose }) => {
                                   <span className="text-xs text-gray-500">
                                     {format(new Date(comment.created_at), 'MMM d, h:mm a')}
                                   </span>
+                                  {comment.comment_type === 'status_change' && (
+                                    <span className="text-xs text-blue-600 font-medium">changed status</span>
+                                  )}
                                 </div>
                                 <p className="mt-1 text-gray-700 whitespace-pre-wrap">{comment.content}</p>
                                 
@@ -201,28 +313,30 @@ const IssueModal = ({ issueId, onClose }) => {
                                   </div>
                                 )}
                                 
-                                <div className="mt-3 flex items-center space-x-2">
-                                  {['thumbs_up', 'heart', 'smile', 'celebrate', 'thinking'].map((type) => {
-                                    const Icon = getReactionIcon(type);
-                                    const reactions = comment.reactions.filter(r => r.reaction_type === type);
-                                    const hasReacted = userReactions.some(r => r.reaction_type === type);
-                                    
-                                    return (
-                                      <button
-                                        key={type}
-                                        onClick={() => handleReaction(comment.id, type, hasReacted)}
-                                        className={`inline-flex items-center space-x-1 px-2 py-1 rounded-full text-xs transition-colors ${
-                                          hasReacted
-                                            ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
-                                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                                        }`}
-                                      >
-                                        <Icon className="w-3 h-3" />
-                                        {reactions.length > 0 && <span>{reactions.length}</span>}
-                                      </button>
-                                    );
-                                  })}
-                                </div>
+                                {comment.comment_type === 'comment' && (
+                                  <div className="mt-3 flex items-center space-x-2">
+                                    {['thumbs_up', 'heart', 'smile', 'celebrate', 'thinking'].map((type) => {
+                                      const Icon = getReactionIcon(type);
+                                      const reactions = comment.reactions.filter(r => r.reaction_type === type);
+                                      const hasReacted = userReactions.some(r => r.reaction_type === type);
+                                      
+                                      return (
+                                        <button
+                                          key={type}
+                                          onClick={() => handleReaction(comment.id, type, hasReacted)}
+                                          className={`inline-flex items-center space-x-1 px-2 py-1 rounded-full text-xs transition-colors ${
+                                            hasReacted
+                                              ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                          }`}
+                                        >
+                                          <Icon className="w-3 h-3" />
+                                          {reactions.length > 0 && <span>{reactions.length}</span>}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -230,7 +344,7 @@ const IssueModal = ({ issueId, onClose }) => {
                       })}
                     </div>
                   ) : (
-                    <p className="text-gray-500 text-center py-4">No comments yet</p>
+                    <p className="text-gray-500 text-center py-4">No activity yet</p>
                   )}
                 </div>
 

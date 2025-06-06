@@ -1,16 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { userAPI, rosterAPI } from '../services/api';
+import { userAPI, rosterAPI, issuesAPI } from '../services/api';
 import { format, addDays } from 'date-fns';
-import { FiX, FiPlus, FiEdit2, FiTrash2, FiUser, FiCalendar } from 'react-icons/fi';
+import { FiX, FiPlus, FiEdit2, FiTrash2, FiUser, FiCalendar, FiTag } from 'react-icons/fi';
 
 const AdminPanel = ({ onClose }) => {
   const [activeTab, setActiveTab] = useState('users');
   const [users, setUsers] = useState([]);
+  const [statuses, setStatuses] = useState([]);
   const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [roster, setRoster] = useState({});
   const [loading, setLoading] = useState(true);
   const [showUserForm, setShowUserForm] = useState(false);
+  const [showStatusForm, setShowStatusForm] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
+  const [editingStatus, setEditingStatus] = useState(null);
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -20,6 +23,11 @@ const AdminPanel = ({ onClose }) => {
     bio: '',
     profileImage: null
   });
+  const [statusFormData, setStatusFormData] = useState({
+    name: '',
+    color: '#6B7280',
+    sort_order: 0
+  });
 
   useEffect(() => {
     loadData();
@@ -28,13 +36,20 @@ const AdminPanel = ({ onClose }) => {
   const loadData = async () => {
     setLoading(true);
     try {
-      const usersResponse = await userAPI.getAll();
+      const [usersResponse, statusesResponse] = await Promise.all([
+        userAPI.getAll(),
+        issuesAPI.getStatuses()
+      ]);
+      
       setUsers(usersResponse.data);
+      setStatuses(statusesResponse.data);
 
-      const startDate = selectedDate;
-      const endDate = format(addDays(new Date(selectedDate), 6), 'yyyy-MM-dd');
-      const rosterResponse = await rosterAPI.getRange(startDate, endDate);
-      setRoster(rosterResponse.data);
+      if (activeTab === 'roster') {
+        const startDate = selectedDate;
+        const endDate = format(addDays(new Date(selectedDate), 6), 'yyyy-MM-dd');
+        const rosterResponse = await rosterAPI.getRange(startDate, endDate);
+        setRoster(rosterResponse.data);
+      }
     } catch (error) {
       console.error('Error loading data:', error);
     } finally {
@@ -69,6 +84,26 @@ const AdminPanel = ({ onClose }) => {
     }
   };
 
+  const handleStatusSubmit = async (e) => {
+    e.preventDefault();
+
+    try {
+      if (editingStatus) {
+        await issuesAPI.updateStatus(editingStatus.id, statusFormData);
+      } else {
+        await issuesAPI.createStatus(statusFormData);
+      }
+      
+      setShowStatusForm(false);
+      setEditingStatus(null);
+      resetStatusForm();
+      loadData();
+    } catch (error) {
+      console.error('Error saving status:', error);
+      alert(error.response?.data?.error || 'Failed to save status');
+    }
+  };
+
   const handleDeleteUser = async (userId) => {
     if (!window.confirm('Are you sure you want to delete this user?')) return;
     
@@ -78,6 +113,18 @@ const AdminPanel = ({ onClose }) => {
     } catch (error) {
       console.error('Error deleting user:', error);
       alert('Failed to delete user');
+    }
+  };
+
+  const handleDeleteStatus = async (statusId) => {
+    if (!window.confirm('Are you sure you want to delete this status?')) return;
+    
+    try {
+      await issuesAPI.deleteStatus(statusId);
+      loadData();
+    } catch (error) {
+      console.error('Error deleting status:', error);
+      alert(error.response?.data?.error || 'Failed to delete status');
     }
   };
 
@@ -119,6 +166,14 @@ const AdminPanel = ({ onClose }) => {
     });
   };
 
+  const resetStatusForm = () => {
+    setStatusFormData({
+      name: '',
+      color: '#6B7280',
+      sort_order: 0
+    });
+  };
+
   const openEditForm = (user) => {
     setEditingUser(user);
     setFormData({
@@ -131,6 +186,16 @@ const AdminPanel = ({ onClose }) => {
       profileImage: null
     });
     setShowUserForm(true);
+  };
+
+  const openEditStatusForm = (status) => {
+    setEditingStatus(status);
+    setStatusFormData({
+      name: status.name,
+      color: status.color,
+      sort_order: status.sort_order
+    });
+    setShowStatusForm(true);
   };
 
   if (loading) {
@@ -165,6 +230,17 @@ const AdminPanel = ({ onClose }) => {
           >
             <FiUser className="inline w-4 h-4 mr-2" />
             Users
+          </button>
+          <button
+            onClick={() => setActiveTab('statuses')}
+            className={`flex-1 py-3 px-6 font-medium transition-colors ${
+              activeTab === 'statuses'
+                ? 'text-blue-600 border-b-2 border-blue-600'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            <FiTag className="inline w-4 h-4 mr-2" />
+            Issue Statuses
           </button>
           <button
             onClick={() => setActiveTab('roster')}
@@ -368,6 +444,123 @@ const AdminPanel = ({ onClose }) => {
                     {user.bio && (
                       <p className="text-sm text-gray-600 mt-1 line-clamp-2">{user.bio}</p>
                     )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : activeTab === 'statuses' ? (
+            <div>
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-lg font-semibold text-gray-900">Manage Issue Statuses</h3>
+                <button
+                  onClick={() => {
+                    setEditingStatus(null);
+                    resetStatusForm();
+                    setShowStatusForm(true);
+                  }}
+                  className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  <FiPlus className="w-4 h-4" />
+                  <span>Add Status</span>
+                </button>
+              </div>
+
+              {showStatusForm ? (
+                <form onSubmit={handleStatusSubmit} className="bg-gray-50 rounded-lg p-6 mb-6">
+                  <h4 className="text-lg font-semibold mb-4">
+                    {editingStatus ? 'Edit Status' : 'Create New Status'}
+                  </h4>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Name *
+                      </label>
+                      <input
+                        type="text"
+                        value={statusFormData.name}
+                        onChange={(e) => setStatusFormData({...statusFormData, name: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Color
+                      </label>
+                      <input
+                        type="color"
+                        value={statusFormData.color}
+                        onChange={(e) => setStatusFormData({...statusFormData, color: e.target.value})}
+                        className="w-full h-10 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Sort Order
+                      </label>
+                      <input
+                        type="number"
+                        value={statusFormData.sort_order}
+                        onChange={(e) => setStatusFormData({...statusFormData, sort_order: parseInt(e.target.value)})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex justify-end space-x-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowStatusForm(false);
+                        setEditingStatus(null);
+                        resetStatusForm();
+                      }}
+                      className="px-4 py-2 text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                      {editingStatus ? 'Update' : 'Create'} Status
+                    </button>
+                  </div>
+                </form>
+              ) : null}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {statuses.map((status) => (
+                  <div key={status.id} className="bg-white border border-gray-200 rounded-lg p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
+                        <div 
+                          className="w-4 h-4 rounded-full" 
+                          style={{ backgroundColor: status.color }}
+                        ></div>
+                        <div>
+                          <h4 className="font-semibold text-gray-900">{status.name}</h4>
+                          <p className="text-sm text-gray-600">Order: {status.sort_order}</p>
+                        </div>
+                      </div>
+                      <div className="flex space-x-1">
+                        <button
+                          onClick={() => openEditStatusForm(status)}
+                          className="p-1 text-gray-600 hover:text-blue-600 transition-colors"
+                        >
+                          <FiEdit2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteStatus(status.id)}
+                          className="p-1 text-gray-600 hover:text-red-600 transition-colors"
+                        >
+                          <FiTrash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>

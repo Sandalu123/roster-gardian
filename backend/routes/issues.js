@@ -3,7 +3,7 @@ const multer = require('multer');
 const path = require('path');
 const router = express.Router();
 const db = require('../db/database');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, adminOnly } = require('../middleware/auth');
 
 const issueStorage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -26,12 +26,70 @@ const commentStorage = multer.diskStorage({
 const issueUpload = multer({ storage: issueStorage });
 const commentUpload = multer({ storage: commentStorage });
 
+// Get all available statuses
+router.get('/statuses', authenticate, (req, res) => {
+  db.all(
+    'SELECT * FROM issue_statuses WHERE is_active = 1 ORDER BY sort_order',
+    (err, statuses) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json(statuses);
+    }
+  );
+});
+
+// Admin: Manage statuses
+router.post('/statuses', authenticate, adminOnly, (req, res) => {
+  const { name, color, sort_order } = req.body;
+  
+  db.run(
+    'INSERT INTO issue_statuses (name, color, sort_order) VALUES (?, ?, ?)',
+    [name, color || '#6B7280', sort_order || 0],
+    function(err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ id: this.lastID, name, color, sort_order });
+    }
+  );
+});
+
+router.put('/statuses/:id', authenticate, adminOnly, (req, res) => {
+  const { id } = req.params;
+  const { name, color, sort_order, is_active } = req.body;
+  
+  db.run(
+    'UPDATE issue_statuses SET name = ?, color = ?, sort_order = ?, is_active = ? WHERE id = ?',
+    [name, color, sort_order, is_active ? 1 : 0, id],
+    function(err) {
+      if (err) return res.status(500).json({ error: err.message });
+      if (this.changes === 0) return res.status(404).json({ error: 'Status not found' });
+      res.json({ message: 'Status updated successfully' });
+    }
+  );
+});
+
+router.delete('/statuses/:id', authenticate, adminOnly, (req, res) => {
+  const { id } = req.params;
+  
+  // Check if any issues use this status
+  db.get('SELECT COUNT(*) as count FROM issues WHERE status_id = ?', [id], (err, result) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (result.count > 0) {
+      return res.status(400).json({ error: 'Cannot delete status that is in use by issues' });
+    }
+    
+    db.run('DELETE FROM issue_statuses WHERE id = ?', [id], function(err) {
+      if (err) return res.status(500).json({ error: err.message });
+      if (this.changes === 0) return res.status(404).json({ error: 'Status not found' });
+      res.json({ message: 'Status deleted successfully' });
+    });
+  });
+});
+
 router.post('/', authenticate, issueUpload.array('attachments', 10), (req, res) => {
   const { title, description, date } = req.body;
   const createdBy = req.user.id;
 
   db.run(
-    'INSERT INTO issues (title, description, date, created_by) VALUES (?, ?, ?, ?)',
+    'INSERT INTO issues (title, description, date, created_by, status_id) VALUES (?, ?, ?, ?, 1)',
     [title, description, date, createdBy],
     function(err) {
       if (err) return res.status(500).json({ error: err.message });
@@ -67,11 +125,13 @@ router.get('/date/:date', (req, res) => {
 
   db.all(
     `SELECT 
-      i.id, i.title, i.description, i.date, i.status, i.created_at,
+      i.id, i.title, i.description, i.date, i.created_at,
       u.id as created_by_id, u.name as created_by_name, u.email as created_by_email,
+      s.name as status_name, s.color as status_color,
       (SELECT COUNT(*) FROM comments WHERE issue_id = i.id) as comment_count
     FROM issues i
     JOIN users u ON i.created_by = u.id
+    JOIN issue_statuses s ON i.status_id = s.id
     WHERE i.date = ?
     ORDER BY i.created_at DESC`,
     [date],
@@ -87,11 +147,13 @@ router.get('/range', (req, res) => {
 
   db.all(
     `SELECT 
-      i.id, i.title, i.description, i.date, i.status, i.created_at,
+      i.id, i.title, i.description, i.date, i.created_at,
       u.id as created_by_id, u.name as created_by_name, u.email as created_by_email,
+      s.name as status_name, s.color as status_color,
       (SELECT COUNT(*) FROM comments WHERE issue_id = i.id) as comment_count
     FROM issues i
     JOIN users u ON i.created_by = u.id
+    JOIN issue_statuses s ON i.status_id = s.id
     WHERE i.date BETWEEN ? AND ?
     ORDER BY i.date, i.created_at DESC`,
     [startDate, endDate],
@@ -116,9 +178,11 @@ router.get('/:id', (req, res) => {
     `SELECT 
       i.*, 
       u.id as created_by_id, u.name as created_by_name, 
-      u.email as created_by_email, u.profile_image as created_by_image
+      u.email as created_by_email, u.profile_image as created_by_image,
+      s.id as status_id, s.name as status_name, s.color as status_color
     FROM issues i
     JOIN users u ON i.created_by = u.id
+    JOIN issue_statuses s ON i.status_id = s.id
     WHERE i.id = ?`,
     [id],
     (err, issue) => {
@@ -138,14 +202,25 @@ router.get('/:id', (req, res) => {
   );
 });
 
+// Delete issue (admin only)
+router.delete('/:id', authenticate, adminOnly, (req, res) => {
+  const { id } = req.params;
+  
+  db.run('DELETE FROM issues WHERE id = ?', [id], function(err) {
+    if (err) return res.status(500).json({ error: err.message });
+    if (this.changes === 0) return res.status(404).json({ error: 'Issue not found' });
+    res.json({ message: 'Issue deleted successfully' });
+  });
+});
+
 router.post('/:id/comments', authenticate, commentUpload.array('attachments', 10), (req, res) => {
   const { id } = req.params;
   const { content } = req.body;
   const userId = req.user.id;
 
   db.run(
-    'INSERT INTO comments (issue_id, user_id, content) VALUES (?, ?, ?)',
-    [id, userId, content],
+    'INSERT INTO comments (issue_id, user_id, content, comment_type) VALUES (?, ?, ?, ?)',
+    [id, userId, content, 'comment'],
     function(err) {
       if (err) return res.status(500).json({ error: err.message });
       
@@ -180,12 +255,16 @@ router.get('/:id/comments', authenticate, (req, res) => {
 
   db.all(
     `SELECT 
-      c.id, c.content, c.created_at,
-      u.id as user_id, u.name as user_name, u.email as user_email, u.profile_image as user_image
+      c.id, c.content, c.created_at, c.comment_type, c.old_status_id, c.new_status_id,
+      u.id as user_id, u.name as user_name, u.email as user_email, u.profile_image as user_image,
+      old_s.name as old_status_name, old_s.color as old_status_color,
+      new_s.name as new_status_name, new_s.color as new_status_color
     FROM comments c
     JOIN users u ON c.user_id = u.id
+    LEFT JOIN issue_statuses old_s ON c.old_status_id = old_s.id
+    LEFT JOIN issue_statuses new_s ON c.new_status_id = new_s.id
     WHERE c.issue_id = ?
-    ORDER BY c.created_at ASC`,
+    ORDER BY c.created_at DESC`,
     [id],
     (err, comments) => {
       if (err) return res.status(500).json({ error: err.message });
@@ -264,19 +343,48 @@ router.delete('/:id/comments/:commentId/reactions/:reactionType', authenticate, 
   );
 });
 
+// Update issue status with logging
 router.put('/:id/status', authenticate, (req, res) => {
   const { id } = req.params;
-  const { status } = req.body;
+  const { status_id } = req.body;
+  const userId = req.user.id;
 
-  db.run(
-    'UPDATE issues SET status = ? WHERE id = ?',
-    [status, id],
-    function(err) {
-      if (err) return res.status(500).json({ error: err.message });
-      if (this.changes === 0) return res.status(404).json({ error: 'Issue not found' });
-      res.json({ message: 'Issue status updated successfully' });
-    }
-  );
+  // Get current status first
+  db.get('SELECT status_id FROM issues WHERE id = ?', [id], (err, currentIssue) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!currentIssue) return res.status(404).json({ error: 'Issue not found' });
+
+    const oldStatusId = currentIssue.status_id;
+    
+    // Update issue status
+    db.run(
+      'UPDATE issues SET status_id = ? WHERE id = ?',
+      [status_id, id],
+      function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        
+        // Log status change as a comment
+        db.get(
+          'SELECT old_s.name as old_name, new_s.name as new_name FROM issue_statuses old_s, issue_statuses new_s WHERE old_s.id = ? AND new_s.id = ?',
+          [oldStatusId, status_id],
+          (err, statusNames) => {
+            if (err) return res.status(500).json({ error: err.message });
+            
+            const logContent = `Status changed from "${statusNames.old_name}" to "${statusNames.new_name}"`;
+            
+            db.run(
+              'INSERT INTO comments (issue_id, user_id, content, comment_type, old_status_id, new_status_id) VALUES (?, ?, ?, ?, ?, ?)',
+              [id, userId, logContent, 'status_change', oldStatusId, status_id],
+              (err) => {
+                if (err) console.error('Error logging status change:', err);
+                res.json({ message: 'Issue status updated successfully' });
+              }
+            );
+          }
+        );
+      }
+    );
+  });
 });
 
 module.exports = router;

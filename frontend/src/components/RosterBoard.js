@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import RosterColumn from './RosterColumn';
 import { FiChevronLeft, FiChevronRight } from 'react-icons/fi';
 
-const RosterBoard = ({ onSelectIssue, onCreateIssue, centerDate, onCenterDateChange }) => {
+const RosterBoard = ({ onSelectIssue, onCreateIssue, onIssueDeleted, centerDate, onCenterDateChange }) => {
   const { user } = useAuth();
   const [rosterData, setRosterData] = useState({});
   const [issuesData, setIssuesData] = useState({});
@@ -40,9 +40,20 @@ const RosterBoard = ({ onSelectIssue, onCreateIssue, centerDate, onCenterDateCha
     }
   };
 
+  const refreshData = () => {
+    loadData();
+  };
+
   const navigateDays = (direction) => {
     onCenterDateChange(addDays(centerDate, direction * 9));
   };
+
+  // Pass the refresh function to parent so it can refresh after operations
+  React.useEffect(() => {
+    if (onIssueDeleted) {
+      onIssueDeleted.current = refreshData;
+    }
+  }, [onIssueDeleted]);
 
   if (loading) {
     return (

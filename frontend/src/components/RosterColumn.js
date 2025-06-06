@@ -17,16 +17,6 @@ const RosterColumn = ({ date, isToday, roster, issues, onSelectIssue, onCreateIs
     return colors[role] || 'bg-gray-100 text-gray-700';
   };
 
-  const getStatusColor = (status) => {
-    const colors = {
-      open: 'bg-red-100 text-red-700',
-      in_progress: 'bg-yellow-100 text-yellow-700',
-      resolved: 'bg-green-100 text-green-700',
-      closed: 'bg-gray-100 text-gray-700'
-    };
-    return colors[status] || 'bg-gray-100 text-gray-700';
-  };
-
   return (
       <div className={`flex-shrink-0 w-80 border-r border-gray-200 ${isToday ? 'bg-blue-50' : 'bg-white'}`}>
         <div className={`sticky top-0 z-10 ${isToday ? 'bg-blue-100' : 'bg-gray-50'} border-b border-gray-200 p-3`}>
@@ -138,9 +128,12 @@ const RosterColumn = ({ date, isToday, roster, issues, onSelectIssue, onCreateIs
                         >
                           <div className="flex items-start justify-between">
                             <h5 className="font-medium text-gray-900 text-sm">{issue.title}</h5>
-                            <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(issue.status)}`}>
-                     {issue.status.replace('_', ' ')}
-                   </span>
+                            <span 
+                              className="text-xs px-2 py-1 rounded-full text-white"
+                              style={{ backgroundColor: issue.status_color || '#6B7280' }}
+                            >
+                              {issue.status_name || 'open'}
+                            </span>
                           </div>
                           <p className="text-xs text-gray-600 mt-1 line-clamp-2">{issue.description}</p>
                           <div className="flex items-center justify-between mt-2">

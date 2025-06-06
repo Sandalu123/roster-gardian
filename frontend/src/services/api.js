@@ -23,13 +23,20 @@ export const issuesAPI = {
   getRange: (startDate, endDate) => 
     apiClient.get(`${API_BASE}/issues/range?startDate=${startDate}&endDate=${endDate}`),
   getById: (id) => apiClient.get(`${API_BASE}/issues/${id}`),
-  updateStatus: (id, status) => apiClient.put(`${API_BASE}/issues/${id}/status`, { status }),
+  delete: (id) => apiClient.delete(`${API_BASE}/issues/${id}`),
+  updateStatus: (id, status_id) => apiClient.put(`${API_BASE}/issues/${id}/status`, { status_id }),
   getComments: (id) => apiClient.get(`${API_BASE}/issues/${id}/comments`),
   addComment: (id, formData) => apiClient.post(`${API_BASE}/issues/${id}/comments`, formData),
   addReaction: (id, commentId, reactionType) => 
     apiClient.post(`${API_BASE}/issues/${id}/comments/${commentId}/reactions`, { reactionType }),
   removeReaction: (id, commentId, reactionType) => 
-    apiClient.delete(`${API_BASE}/issues/${id}/comments/${commentId}/reactions/${reactionType}`)
+    apiClient.delete(`${API_BASE}/issues/${id}/comments/${commentId}/reactions/${reactionType}`),
+  
+  // Status management
+  getStatuses: () => apiClient.get(`${API_BASE}/issues/statuses`),
+  createStatus: (data) => apiClient.post(`${API_BASE}/issues/statuses`, data),
+  updateStatus: (id, data) => apiClient.put(`${API_BASE}/issues/statuses/${id}`, data),
+  deleteStatus: (id) => apiClient.delete(`${API_BASE}/issues/statuses/${id}`)
 };
 
 export default apiClient;

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import LoginModal from './components/LoginModal';
 import Header from './components/Header';
@@ -16,6 +16,7 @@ function AppContent() {
   const [showCreateIssue, setShowCreateIssue] = useState(false);
   const [selectedDate, setSelectedDate] = useState(null);
   const [centerDate, setCenterDate] = useState(new Date());
+  const refreshRosterRef = useRef(null);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -31,7 +32,25 @@ function AppContent() {
   const handleIssueCreated = () => {
     setShowCreateIssue(false);
     setSelectedDate(null);
-    window.location.reload();
+    // Refresh the roster board
+    if (refreshRosterRef.current) {
+      refreshRosterRef.current();
+    }
+  };
+
+  const handleIssueDeleted = () => {
+    setSelectedIssue(null);
+    // Refresh the roster board
+    if (refreshRosterRef.current) {
+      refreshRosterRef.current();
+    }
+  };
+
+  const handleIssueUpdated = () => {
+    // Refresh the roster board when issue status is updated
+    if (refreshRosterRef.current) {
+      refreshRosterRef.current();
+    }
   };
 
   if (loading) {
@@ -53,6 +72,7 @@ function AppContent() {
         <RosterBoard 
           onSelectIssue={setSelectedIssue}
           onCreateIssue={handleCreateIssue}
+          onIssueDeleted={refreshRosterRef}
           centerDate={centerDate}
           onCenterDateChange={setCenterDate}
         />
@@ -70,6 +90,8 @@ function AppContent() {
         <IssueModal 
           issueId={selectedIssue.id}
           onClose={() => setSelectedIssue(null)}
+          onDeleted={handleIssueDeleted}
+          onUpdated={handleIssueUpdated}
         />
       )}
 
