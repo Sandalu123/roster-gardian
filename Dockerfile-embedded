@@ -1,0 +1,60 @@
+# Temporary Dockerfile using embedded server to bypass module loading issues
+FROM node:18-alpine AS base
+RUN apk add --no-cache dumb-init wget
+WORKDIR /app
+
+# Build frontend
+FROM base AS frontend-build
+COPY frontend/package*.json ./frontend/
+RUN cd frontend && npm cache clean --force && npm install
+COPY frontend ./frontend/
+ENV REACT_APP_API_URL=http://localhost:4010
+RUN cd frontend && npm run build
+
+# Build backend dependencies
+FROM base AS backend-deps
+COPY backend/package*.json ./backend/
+RUN cd backend && npm cache clean --force && npm install --only=production
+
+# Final production image
+FROM node:18-alpine AS production
+RUN apk add --no-cache dumb-init tini wget && \
+    addgroup -g 1001 -S nodejs && \
+    adduser -S nodejs -u 1001
+
+WORKDIR /app
+
+# Copy built frontend
+COPY --from=frontend-build --chown=nodejs:nodejs /app/frontend/build ./frontend/build
+
+# Copy backend - using embedded server as main server
+COPY --chown=nodejs:nodejs backend ./backend/
+COPY --from=backend-deps --chown=nodejs:nodejs /app/backend/node_modules ./backend/node_modules
+
+# Use embedded server as main server (temporary fix)
+RUN cp /app/backend/server-embedded.js /app/backend/server.js
+
+# Create directories and set permissions
+RUN mkdir -p backend/uploads/profiles backend/uploads/issues backend/uploads/comments backend/db && \
+    chown -R nodejs:nodejs backend && \
+    chmod -R 755 backend
+
+# Verify files exist
+RUN echo "=== Files check ===" && \
+    ls -la backend/ && \
+    echo "=== Server.js content ===" && \
+    head -10 backend/server.js && \
+    echo "=== Routes check ===" && \
+    ls -la backend/routes/ && \
+    echo "=== Middleware check ===" && \
+    ls -la backend/middleware/
+
+# Install serve for frontend
+RUN npm install -g serve@14.2.1 && npm cache clean --force
+
+USER nodejs
+
+EXPOSE 4010 3000
+
+# Simple startup command
+CMD ["sh", "-c", "cd /app/backend && node server.js & cd /app && serve -s frontend/build -l 3000 --cors & wait"]
