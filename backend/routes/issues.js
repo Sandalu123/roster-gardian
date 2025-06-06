@@ -239,32 +239,54 @@ router.post('/:id/comments', authenticate, commentUpload.array('attachments', 10
   const { content } = req.body;
   const userId = req.user.id;
 
+  console.log('Adding comment to issue:', id);
+  console.log('Comment content:', content);
+  console.log('Comment files received:', req.files ? req.files.length : 0);
+
   db.run(
     'INSERT INTO comments (issue_id, user_id, content, comment_type) VALUES (?, ?, ?, ?)',
     [id, userId, content, 'comment'],
     function(err) {
-      if (err) return res.status(500).json({ error: err.message });
+      if (err) {
+        console.error('Error creating comment:', err);
+        return res.status(500).json({ error: err.message });
+      }
       
       const commentId = this.lastID;
+      console.log('Comment created with ID:', commentId);
       
       if (req.files && req.files.length > 0) {
-        const attachmentPromises = req.files.map(file => {
+        console.log('Processing comment attachments:', commentId);
+        const attachmentPromises = req.files.map((file, index) => {
+          console.log(`Processing comment attachment ${index}:`, file.filename, file.mimetype);
           return new Promise((resolve, reject) => {
             db.run(
               'INSERT INTO comment_attachments (comment_id, file_path, file_name, file_type) VALUES (?, ?, ?, ?)',
               [commentId, `/uploads/comments/${file.filename}`, file.originalname, file.mimetype],
               (err) => {
-                if (err) reject(err);
-                else resolve();
+                if (err) {
+                  console.error('Error saving comment attachment:', err);
+                  reject(err);
+                } else {
+                  console.log('Comment attachment saved:', file.originalname);
+                  resolve();
+                }
               }
             );
           });
         });
 
         Promise.all(attachmentPromises)
-          .then(() => res.json({ id: commentId, content }))
-          .catch(err => res.status(500).json({ error: err.message }));
+          .then(() => {
+            console.log('All comment attachments saved for comment:', commentId);
+            res.json({ id: commentId, content });
+          })
+          .catch(err => {
+            console.error('Error saving comment attachments:', err);
+            res.status(500).json({ error: err.message });
+          });
       } else {
+        console.log('No attachments for comment:', commentId);
         res.json({ id: commentId, content });
       }
     }

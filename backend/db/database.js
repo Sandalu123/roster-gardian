@@ -1,10 +1,31 @@
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
+const fs = require('fs');
+
+// Ensure database directory exists
+const dbDir = path.join(__dirname);
+if (!fs.existsSync(dbDir)) {
+  fs.mkdirSync(dbDir, { recursive: true });
+}
 
 const dbPath = path.join(__dirname, 'roster_guardian.db');
-const db = new sqlite3.Database(dbPath);
+console.log('Database path:', dbPath);
+
+// Check if database file exists
+const dbExists = fs.existsSync(dbPath);
+console.log('Database exists:', dbExists);
+
+const db = new sqlite3.Database(dbPath, (err) => {
+  if (err) {
+    console.error('Error opening database:', err);
+  } else {
+    console.log('✅ Connected to SQLite database');
+  }
+});
 
 db.serialize(() => {
+  console.log('🔄 Setting up database schema...');
+
   // Users table
   db.run(`CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -16,7 +37,10 @@ db.serialize(() => {
     contact_number TEXT,
     bio TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )`);
+  )`, (err) => {
+    if (err) console.error('Error creating users table:', err);
+    else console.log('✅ Users table ready');
+  });
 
   // Roster table
   db.run(`CREATE TABLE IF NOT EXISTS roster (
@@ -26,7 +50,10 @@ db.serialize(() => {
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id),
     UNIQUE(user_id, date)
-  )`);
+  )`, (err) => {
+    if (err) console.error('Error creating roster table:', err);
+    else console.log('✅ Roster table ready');
+  });
 
   // Issue statuses table (for configurable statuses)
   db.run(`CREATE TABLE IF NOT EXISTS issue_statuses (
@@ -36,14 +63,26 @@ db.serialize(() => {
     sort_order INTEGER DEFAULT 0,
     is_active BOOLEAN DEFAULT 1,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )`);
-
-  // Insert default statuses if they don't exist
-  db.run(`INSERT OR IGNORE INTO issue_statuses (name, color, sort_order) VALUES 
-    ('open', '#EF4444', 1),
-    ('investigation', '#F59E0B', 2),
-    ('resolved', '#10B981', 3),
-    ('closed', '#6B7280', 4)`);
+  )`, (err) => {
+    if (err) {
+      console.error('Error creating issue_statuses table:', err);
+    } else {
+      console.log('✅ Issue statuses table ready');
+      
+      // Insert default statuses if they don't exist
+      db.run(`INSERT OR IGNORE INTO issue_statuses (name, color, sort_order) VALUES 
+        ('open', '#EF4444', 1),
+        ('investigation', '#F59E0B', 2),
+        ('resolved', '#10B981', 3),
+        ('closed', '#6B7280', 4)`, (err) => {
+        if (err) {
+          console.error('Error inserting default statuses:', err);
+        } else {
+          console.log('✅ Default statuses inserted');
+        }
+      });
+    }
+  });
 
   // Check if issues table exists and what columns it has
   db.all("PRAGMA table_info(issues)", (err, columns) => {
@@ -54,6 +93,8 @@ db.serialize(() => {
 
     const hasStatusColumn = columns.some(col => col.name === 'status');
     const hasStatusIdColumn = columns.some(col => col.name === 'status_id');
+
+    console.log(`📊 Issues table status: hasStatus=${hasStatusColumn}, hasStatusId=${hasStatusIdColumn}`);
 
     if (!columns.length) {
       // Create new issues table with status_id
@@ -67,11 +108,13 @@ db.serialize(() => {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (created_by) REFERENCES users(id),
         FOREIGN KEY (status_id) REFERENCES issue_statuses(id)
-      )`);
-      console.log('Created new issues table with status_id');
+      )`, (err) => {
+        if (err) console.error('Error creating issues table:', err);
+        else console.log('✅ Issues table created with status_id');
+      });
     } else if (hasStatusColumn && !hasStatusIdColumn) {
       // Migrate from old status column to status_id
-      console.log('Migrating issues table from status to status_id...');
+      console.log('🔄 Migrating issues table from status to status_id...');
       
       // Add status_id column
       db.run(`ALTER TABLE issues ADD COLUMN status_id INTEGER DEFAULT 1`, (err) => {
@@ -95,49 +138,7 @@ db.serialize(() => {
             console.error('Error migrating status data:', err);
             return;
           }
-
-          // Create temporary table without status column
-          db.run(`CREATE TABLE issues_new (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            title TEXT NOT NULL,
-            description TEXT NOT NULL,
-            date DATE NOT NULL,
-            created_by INTEGER NOT NULL,
-            status_id INTEGER DEFAULT 1,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (created_by) REFERENCES users(id),
-            FOREIGN KEY (status_id) REFERENCES issue_statuses(id)
-          )`, (err) => {
-            if (err) {
-              console.error('Error creating new issues table:', err);
-              return;
-            }
-
-            // Copy data to new table
-            db.run(`INSERT INTO issues_new (id, title, description, date, created_by, status_id, created_at)
-                    SELECT id, title, description, date, created_by, status_id, created_at FROM issues`, (err) => {
-              if (err) {
-                console.error('Error copying data to new table:', err);
-                return;
-              }
-
-              // Drop old table and rename new one
-              db.run(`DROP TABLE issues`, (err) => {
-                if (err) {
-                  console.error('Error dropping old issues table:', err);
-                  return;
-                }
-
-                db.run(`ALTER TABLE issues_new RENAME TO issues`, (err) => {
-                  if (err) {
-                    console.error('Error renaming new issues table:', err);
-                    return;
-                  }
-                  console.log('Successfully migrated issues table');
-                });
-              });
-            });
-          });
+          console.log('✅ Issues table migrated to status_id system');
         });
       });
     } else if (!hasStatusColumn && !hasStatusIdColumn) {
@@ -146,11 +147,11 @@ db.serialize(() => {
         if (err && !err.message.includes('duplicate column')) {
           console.error('Error adding status_id column:', err);
         } else {
-          console.log('Added status_id column to existing issues table');
+          console.log('✅ Added status_id column to existing issues table');
         }
       });
     } else {
-      console.log('Issues table already has status_id column');
+      console.log('✅ Issues table already properly configured');
     }
   });
 
@@ -163,7 +164,10 @@ db.serialize(() => {
     file_type TEXT,
     uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (issue_id) REFERENCES issues(id) ON DELETE CASCADE
-  )`);
+  )`, (err) => {
+    if (err) console.error('Error creating issue_attachments table:', err);
+    else console.log('✅ Issue attachments table ready');
+  });
 
   // Comments table (enhanced for status change logging)
   db.run(`CREATE TABLE IF NOT EXISTS comments (
@@ -179,25 +183,30 @@ db.serialize(() => {
     FOREIGN KEY (user_id) REFERENCES users(id),
     FOREIGN KEY (old_status_id) REFERENCES issue_statuses(id),
     FOREIGN KEY (new_status_id) REFERENCES issue_statuses(id)
-  )`);
+  )`, (err) => {
+    if (err) {
+      console.error('Error creating comments table:', err);
+    } else {
+      console.log('✅ Comments table ready');
+      
+      // Add missing columns if they don't exist
+      db.run(`ALTER TABLE comments ADD COLUMN comment_type TEXT DEFAULT 'comment'`, (err) => {
+        if (err && !err.message.includes('duplicate column')) {
+          console.error('Error adding comment_type column:', err);
+        }
+      });
 
-  // Add comment_type column if it doesn't exist
-  db.run(`ALTER TABLE comments ADD COLUMN comment_type TEXT DEFAULT 'comment'`, (err) => {
-    if (err && !err.message.includes('duplicate column')) {
-      console.error('Error adding comment_type column:', err);
-    }
-  });
+      db.run(`ALTER TABLE comments ADD COLUMN old_status_id INTEGER`, (err) => {
+        if (err && !err.message.includes('duplicate column')) {
+          console.error('Error adding old_status_id column:', err);
+        }
+      });
 
-  // Add status tracking columns if they don't exist
-  db.run(`ALTER TABLE comments ADD COLUMN old_status_id INTEGER`, (err) => {
-    if (err && !err.message.includes('duplicate column')) {
-      console.error('Error adding old_status_id column:', err);
-    }
-  });
-
-  db.run(`ALTER TABLE comments ADD COLUMN new_status_id INTEGER`, (err) => {
-    if (err && !err.message.includes('duplicate column')) {
-      console.error('Error adding new_status_id column:', err);
+      db.run(`ALTER TABLE comments ADD COLUMN new_status_id INTEGER`, (err) => {
+        if (err && !err.message.includes('duplicate column')) {
+          console.error('Error adding new_status_id column:', err);
+        }
+      });
     }
   });
 
@@ -210,7 +219,10 @@ db.serialize(() => {
     file_type TEXT,
     uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (comment_id) REFERENCES comments(id) ON DELETE CASCADE
-  )`);
+  )`, (err) => {
+    if (err) console.error('Error creating comment_attachments table:', err);
+    else console.log('✅ Comment attachments table ready');
+  });
 
   // Reactions table
   db.run(`CREATE TABLE IF NOT EXISTS reactions (
@@ -222,9 +234,17 @@ db.serialize(() => {
     FOREIGN KEY (comment_id) REFERENCES comments(id) ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES users(id),
     UNIQUE(comment_id, user_id, reaction_type)
-  )`);
+  )`, (err) => {
+    if (err) console.error('Error creating reactions table:', err);
+    else console.log('✅ Reactions table ready');
+  });
 
-  console.log('Database setup completed successfully');
+  console.log('🎉 Database setup completed successfully');
+});
+
+// Handle database errors
+db.on('error', (err) => {
+  console.error('Database error:', err);
 });
 
 module.exports = db;

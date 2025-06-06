@@ -3,6 +3,16 @@
 
 echo "🚀 Starting Roster Guardian..."
 
+# Debug: Check directory structure
+echo "🔍 Checking directory structure..."
+echo "Current directory: $(pwd)"
+echo "Backend directory contents:"
+ls -la /app/backend/
+echo "DB directory contents:"
+ls -la /app/backend/db/ 2>/dev/null || echo "❌ DB directory not found"
+echo "Routes directory contents:"
+ls -la /app/backend/routes/ 2>/dev/null || echo "❌ Routes directory not found"
+
 # Set environment variables
 export NODE_ENV=${NODE_ENV:-production}
 export PORT=${PORT:-4010}
@@ -12,17 +22,22 @@ export FRONTEND_PORT=${FRONTEND_PORT:-3000}
 mkdir -p /app/backend/uploads/profiles /app/backend/uploads/issues /app/backend/uploads/comments
 chmod -R 755 /app/backend/uploads
 
-# Run database migration
-echo "🔄 Running database migration..."
-cd /app/backend && npm run migrate
+# Ensure database directory exists
+mkdir -p /app/backend/db
+chmod 755 /app/backend/db
 
-# Check if migration was successful
-if [ $? -ne 0 ]; then
-    echo "❌ Database migration failed, exiting..."
-    exit 1
+echo "📊 Database and uploads directories ready"
+
+# Debug: Check if database.js exists
+if [ -f "/app/backend/db/database.js" ]; then
+    echo "✅ database.js found"
+else
+    echo "❌ database.js NOT found"
+    echo "Contents of /app/backend/db/:"
+    ls -la /app/backend/db/ 2>/dev/null || echo "Directory does not exist"
 fi
 
-# Start backend
+# Start backend (database migration happens automatically in database.js)
 echo "📡 Starting backend on port ${PORT}..."
 cd /app/backend && node server.js &
 BACKEND_PID=$!
