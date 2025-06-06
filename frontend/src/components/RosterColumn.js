@@ -54,7 +54,7 @@ const RosterColumn = ({ date, isToday, roster, issues, onSelectIssue, onCreateIs
                       <div className="flex items-start space-x-3">
                         {person.profileImage ? (
                             <img
-                                src={`http://localhost:5000${person.profileImage}`}
+                                src={`http://localhost:4010${person.profileImage}`}
                                 alt={person.name}
                                 className="w-12 h-12 rounded-full object-cover"
                                 title={person.bio || person.name}

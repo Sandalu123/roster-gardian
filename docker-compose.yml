@@ -1,0 +1,22 @@
+services:
+  roster-guardian:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "4010:4010"  # Backend API
+      - "3000:3000"  # Frontend
+    environment:
+      - NODE_ENV=production
+      - PORT=4010
+      - FRONTEND_PORT=3000
+    volumes:
+      # Persist uploads
+      - ./uploads:/app/backend/uploads
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:4010/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s

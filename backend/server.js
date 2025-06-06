@@ -10,7 +10,7 @@ const rosterRouter = require('./routes/roster');
 const issuesRouter = require('./routes/issues');
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 4010;
 
 app.use(cors({
   origin: 'http://localhost:3000',

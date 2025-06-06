@@ -134,7 +134,7 @@ const IssueModal = ({ issueId, onClose }) => {
                     {issue.attachments.map((attachment) => (
                       <a
                         key={attachment.id}
-                        href={`http://localhost:5000${attachment.file_path}`}
+                        href={`http://localhost:4010${attachment.file_path}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="flex items-center space-x-2 text-sm text-blue-600 hover:text-blue-800"
@@ -164,7 +164,7 @@ const IssueModal = ({ issueId, onClose }) => {
                             <div className="flex items-start space-x-3">
                               {comment.user_image ? (
                                 <img
-                                  src={`http://localhost:5000${comment.user_image}`}
+                                  src={`http://localhost:4010${comment.user_image}`}
                                   alt={comment.user_name}
                                   className="w-8 h-8 rounded-full object-cover"
                                 />
@@ -189,7 +189,7 @@ const IssueModal = ({ issueId, onClose }) => {
                                     {comment.attachments.map((attachment) => (
                                       <a
                                         key={attachment.id}
-                                        href={`http://localhost:5000${attachment.file_path}`}
+                                        href={`http://localhost:4010${attachment.file_path}`}
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className="inline-flex items-center space-x-1 text-sm text-blue-600 hover:text-blue-800"

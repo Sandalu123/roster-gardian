@@ -325,7 +325,7 @@ const AdminPanel = ({ onClose }) => {
                       <div className="flex items-start space-x-3">
                         {user.profile_image ? (
                           <img
-                            src={`http://localhost:5000${user.profile_image}`}
+                            src={`http://localhost:4010${user.profile_image}`}
                             alt={user.name}
                             className="w-12 h-12 rounded-full object-cover"
                           />

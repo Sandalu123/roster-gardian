@@ -44,7 +44,7 @@ A comprehensive support roster management application with issue tracking and te
    ```bash
    npm start
    ```
-   The server will run on http://localhost:5000
+   The server will run on http://localhost:4010
 
 ### Frontend Setup
 

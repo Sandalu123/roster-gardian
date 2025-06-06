@@ -21,7 +21,7 @@ npm run seed
 npm start
 ```
 
-The backend server will start on http://localhost:5000
+The backend server will start on http://localhost:4010
 
 ### 2. Frontend Setup
 Open a new terminal window:

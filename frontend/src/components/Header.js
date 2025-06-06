@@ -19,7 +19,7 @@ const Header = ({ onShowLogin, onShowAdmin }) => {
                 <div className="flex items-center space-x-3">
                   {user.profileImage ? (
                     <img
-                      src={`http://localhost:5000${user.profileImage}`}
+                      src={`http://localhost:4010${user.profileImage}`}
                       alt={user.name}
                       className="w-8 h-8 rounded-full object-cover"
                     />
