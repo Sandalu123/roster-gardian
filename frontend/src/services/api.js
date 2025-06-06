@@ -1,38 +1,35 @@
-import axios from 'axios';
+import apiClient from '../config/api';
 
-const API = axios.create({
-  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:4010/api',
-  withCredentials: true
-});
+const API_BASE = '/api';
 
 export const userAPI = {
-  getAll: () => API.get('/users'),
-  create: (formData) => API.post('/users/register', formData),
-  update: (id, formData) => API.put(`/users/${id}`, formData),
-  delete: (id) => API.delete(`/users/${id}`)
+  getAll: () => apiClient.get(`${API_BASE}/users`),
+  create: (formData) => apiClient.post(`${API_BASE}/users/register`, formData),
+  update: (id, formData) => apiClient.put(`${API_BASE}/users/${id}`, formData),
+  delete: (id) => apiClient.delete(`${API_BASE}/users/${id}`)
 };
 
 export const rosterAPI = {
   getRange: (startDate, endDate) => 
-    API.get(`/roster/range?startDate=${startDate}&endDate=${endDate}`),
-  create: (data) => API.post('/roster', data),
-  update: (id, data) => API.put(`/roster/${id}`, data),
-  delete: (id) => API.delete(`/roster/${id}`)
+    apiClient.get(`${API_BASE}/roster/range?startDate=${startDate}&endDate=${endDate}`),
+  create: (data) => apiClient.post(`${API_BASE}/roster`, data),
+  update: (id, data) => apiClient.put(`${API_BASE}/roster/${id}`, data),
+  delete: (id) => apiClient.delete(`${API_BASE}/roster/${id}`)
 };
 
 export const issuesAPI = {
-  create: (formData) => API.post('/issues', formData),
-  getByDate: (date) => API.get(`/issues/date/${date}`),
+  create: (formData) => apiClient.post(`${API_BASE}/issues`, formData),
+  getByDate: (date) => apiClient.get(`${API_BASE}/issues/date/${date}`),
   getRange: (startDate, endDate) => 
-    API.get(`/issues/range?startDate=${startDate}&endDate=${endDate}`),
-  getById: (id) => API.get(`/issues/${id}`),
-  updateStatus: (id, status) => API.put(`/issues/${id}/status`, { status }),
-  getComments: (id) => API.get(`/issues/${id}/comments`),
-  addComment: (id, formData) => API.post(`/issues/${id}/comments`, formData),
+    apiClient.get(`${API_BASE}/issues/range?startDate=${startDate}&endDate=${endDate}`),
+  getById: (id) => apiClient.get(`${API_BASE}/issues/${id}`),
+  updateStatus: (id, status) => apiClient.put(`${API_BASE}/issues/${id}/status`, { status }),
+  getComments: (id) => apiClient.get(`${API_BASE}/issues/${id}/comments`),
+  addComment: (id, formData) => apiClient.post(`${API_BASE}/issues/${id}/comments`, formData),
   addReaction: (id, commentId, reactionType) => 
-    API.post(`/issues/${id}/comments/${commentId}/reactions`, { reactionType }),
+    apiClient.post(`${API_BASE}/issues/${id}/comments/${commentId}/reactions`, { reactionType }),
   removeReaction: (id, commentId, reactionType) => 
-    API.delete(`/issues/${id}/comments/${commentId}/reactions/${reactionType}`)
+    apiClient.delete(`${API_BASE}/issues/${id}/comments/${commentId}/reactions/${reactionType}`)
 };
 
-export default API;
+export default apiClient;

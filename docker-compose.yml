@@ -10,9 +10,12 @@ services:
       - NODE_ENV=production
       - PORT=4010
       - FRONTEND_PORT=3000
+      # Add environment variables for API URLs
+      - REACT_APP_API_URL=http://localhost:4010
+      - API_BASE_URL=http://localhost:4010
     volumes:
-      # Persist uploads
-      - ./uploads:/app/backend/uploads
+      # Persist uploads with proper permissions
+      - ./uploads:/app/backend/uploads:rw
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:4010/health"]
@@ -20,3 +23,10 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    # Add network configuration for better container communication
+    networks:
+      - roster-network
+
+networks:
+  roster-network:
+    driver: bridge
