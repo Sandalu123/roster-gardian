@@ -2,13 +2,13 @@ const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const fs = require('fs');
 
-// Store database in a separate data directory instead of db directory
-const dbDir = path.join(__dirname, '..', 'data');
+// Ensure database directory exists
+const dbDir = path.join(__dirname);
 if (!fs.existsSync(dbDir)) {
   fs.mkdirSync(dbDir, { recursive: true });
 }
 
-const dbPath = path.join(dbDir, 'roster_guardian.db');
+const dbPath = path.join(__dirname, 'roster_guardian.db');
 console.log('Database path:', dbPath);
 
 // Check if database file exists

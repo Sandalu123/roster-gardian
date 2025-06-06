@@ -16,8 +16,8 @@ services:
     volumes:
       # Persist uploads with proper permissions
       - ./uploads:/app/backend/uploads:rw
-      # Persist database
-      - ./data:/app/backend/db:rw
+      # Only mount the database file, not the entire db directory
+      - ./data:/app/backend/data:rw
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:4010/health"]
